@@ -32,8 +32,12 @@ double* roulette;
    +-----------------------------------------------------*/
 unsigned chromosome_length; //Tamaño del cromosoma
 double crossover_probability; //(--->video 3)
-double mutation_probability //(--->video 4)
+double mutation_probability; //(--->video 4)
 unsigned max_generations; // video 6
+unsigned selected_father;  ///CORRECION VIDEO 7 
+unsigned selected_mother;  ///CORRECION VIDEO 7
+
+
 //Video 6 parametros del algortimo
 void getParameters() 
 {
@@ -56,13 +60,21 @@ void allocateMemory()       //Hacer una función que va a guardar esas poblacion
     //Vasmos ahora a reservar memoria para los cromosomas de manera itereable
     int i;
     chromosome_length = ceil(log2(( FX_UPPER_BOUND - FX_LOWER_BOUND)*pow(10,PRECISION))); //Definido el largo del cromosoma
-    required_bytes = chromosome_length * sizeof(int);
+    //required_bytes = chromosome_length * sizeof(int); //CORRECION VIDEO 7
+
     for(i=0; i<POPULATION_SIZE; i++){
-        parents[i].chromosome = (int*) malloc(required_bytes);
-        offspring[i].chromosome = (int*) malloc(required_bytes);
-        // (VAMOS A RESERVAR MEMORIA PARA LA RULETA --> VIDEO 2)
-        roulette = (double*) malloc(sizeof(double)* POPULATIONSIZE);
+        parents[i].chromosome = (int*) calloc(chromosome_length, sizeof(int));
+        offspring[i].chromosome = (int*) calloc(chromosome_length, sizeof(int));
+        parents[i].x = offspring[i].x = RAND_MAX;  //correcion video 7
+        parents[i].fitness = offspring[i].fitness = 0;         //correcion video 7
+        parents[i].parents[0] = offspring[i].parents[0] = -1;         //correcion video 7
+        parents[i].parents[1] = offspring[i].parents[1] = -1;         //correcion video 7
+        parents[i].crossover_place = offspring[i].crossover_place = -1;         //correcion video 7
+        parents[i].mutation_place = offspring[i].mutation_place = -1;         //correcion video 7
     }
+    the_best.chromosome = (int*) calloc(chromosome_length, sizeof(int));   //correcion video 7
+    // (VAMOS A RESERVAR MEMORIA PARA LA RULETA --> VIDEO 2) correcion video 7
+    roulette = (double*) malloc(sizeof(double)* POPULATION_SIZE);
 }
 /* + ----------------------------------------------------
    ! FUNCION QUE GENERA LOS ALEATORIOS -> devolver un aleatorio sobre un intervalo
@@ -76,10 +88,10 @@ double randomDouble(double a, double b)
    +-----------------------------------------------------*/
 int flip(double probability)
 {
-    if(randomDouble(0,1) < probability)
-        return 0;
+    if(randomDouble(0,1) <= probability)
+        return 1;  //correcion video 7
     else
-        return 1;
+        return 0;  //correcion video 7
 }
 
 /* + ----------------------------------------------------
@@ -87,20 +99,10 @@ int flip(double probability)
    +-----------------------------------------------------*/
 void createFirstGeneration()
 {
-    int i;
-    for (i=0; i<POPULATION_SIZE;i++) {
-        parents[i].x = RAND_MAX;                                    //Fenotipo
-        parents[i].fitness = 0;                                     //Aptitud
-        parents[i].parents[0] = parents[i].parents[1] = -1;         //Padres
-        parents[i].mutation_place = parents[i].crossover_place = -1;//Mutacion y cruce
-
-        ////Cromosoma//////
-
-        int j ;
-        for(j = 0; j<chromosome_length; j++){
-            parents[i].chromosome[j] = flip(0.5);
-        }
-    }
+    int i, j ;
+    for (i=0; i<POPULATION_SIZE;i++)          //correcion video 7
+        for(j = 0; j<chromosome_length; j++)     //correcion video 7
+            parents[i].chromosome[j] = flip(0.5); //correcion video 7  // generacion del cromosoma aleatorio
 }
 /* + ----------------------------------------------------
    ! DECODIFICAR EL GENOTIPO EN BINARIO A REAL Y APLICAR AJUSTE AL RANGO
@@ -108,18 +110,19 @@ void createFirstGeneration()
 double binary2real(int* chromosome)
 {
     //Converión a  numero binario -> codificación
-    int i,
+    int i;
     double aux = 0.0;
 
     for(i = chromosome_length-1 ; i >=0 ; i--)
-        aux += (double) pow(2,chromosome_length - i - 1)    
+        if(chromosome[i] == 1) //correcion video 7
+            aux += (double) pow(2,chromosome_length - i - 1); 
         //Ajuste al rango
     return FX_LOWER_BOUND + ((aux*(FX_UPPER_BOUND-FX_LOWER_BOUND))/(pow(2,chromosome_length)-1));
 }
 /* + ----------------------------------------------------
    ! EVALUAR APTITUD DEL INDIVIDUO
    +-----------------------------------------------------*/
-void evaluateTargetFunction(Individual* Individual)
+void evaluateTargetFunction(Individual* individual)
 {
     individual->x = binary2real(individual->chromosome); // le estamos haciendo la decodificación del ajuste al rango
     individual->fitness = 1/(pow(individual->x, 2)+0.001);       //Asignando su aptitud
@@ -143,7 +146,7 @@ void updateRoulette(Individual* population)
     for(i = 0; i<POPULATION_SIZE; i++)
         sum_fitness += population[i].fitness;
     for(i = 0; i<POPULATION_SIZE; i++)
-        roulette[i] = poblacion[i].fitness / sum_fitness;
+        roulette[i] = population[i].fitness / sum_fitness;
 }
 /* + ----------------------------------------------------
    ! HACER LA SELECCION POR LA RULETA
@@ -152,10 +155,11 @@ unsigned rouletteWheelSelection()
 {
     double r = randomDouble(0,1);
     double sum = 0.0;
-    int i;
-    for (i = 0; sum<r; i++)
-        sum += roulette[i];
-    return i;
+    int i, current_individual; //CORRECCIO VIDEO 7
+    for (i = POPULATION_SIZE; sum<r; i++)
+        current_individual = i % POPULATION_SIZE; //CORRECCIO VIDEO 7
+        sum += roulette[current_individual];
+    return current_individual;    //CORRECCIO VIDEO 7
 }
 
 /* + ----------------------------------------------------
@@ -166,17 +170,25 @@ void crossover(Individual* father, Individual* mother, Individual* child1, Indiv
     int i;
     if (flip(crossover_probability)){
         unsigned p = (unsigned) randomDouble(1,chromosome_length-2);
-        for(i=p+1; i<chromosome_length,i++){
+        for(i=0; i<p;i++){
             child1->chromosome[i] = father->chromosome[i];
+            child2->chromosome[p+i] = mother->chromosome[i];
+        }
+        for(i=p+1; i<chromosome_length;i++){
+            child1->chromosome[i] = mother->chromosome[i];
             child2->chromosome[i-p-1] = father->chromosome[i];
         }
         child1->crossover_place = child2->crossover_place = p;
+        child1->parents[0] = child2->parents[0] = selected_father +1;   //COORECOPN VIDEO 7
+        child1->parents[1] = child2->parents[1] = selected_mother +1;   //COORECOPN VIDEO 7
     } else {
-        for(i=0; i<chromosome_length,i++){
+        for(i=0; i<chromosome_length;i++){
             child1->chromosome[i] = father->chromosome[i];
             child1->chromosome[i] = father->chromosome[i];
         }
         child1->crossover_place = child2->crossover_place = -1;
+        child1->parents[0] = child2->parents[0] = 0;   //COORECOPN VIDEO 7
+        child1->parents[1] = child2->parents[1] = 0;   //COORECOPN VIDEO 7
     }
 }
 /* + ----------------------------------------------------
@@ -186,7 +198,7 @@ void mutation(Individual* individual)
 {
     if(flip(mutation_probability)){
         unsigned p = (unsigned) randomDouble(0, chromosome_length-1);
-        individual->chromosome[P] = 1 - individual->chromosome[P];
+        individual->chromosome[p] = 1 - individual->chromosome[p];
         individual->mutation_place = p;
     }else{
         individual->mutation_place = -1;
@@ -197,8 +209,12 @@ void mutation(Individual* individual)
    +-----------------------------------------------------*/
 
 void elitism(){
-    unsigned words_child1 = words_child2 = 0;
-    the_best = parents[0];
+    unsigned best_parent;
+    unsigned words_child1, words_child2 ;
+    int i;
+
+    best_parent = words_child1 = words_child2 = 0;
+    
 
     for(i=0; i<POPULATION_SIZE;i++){
         if(offspring[i].fitness < offspring[words_child1].fitness)
@@ -206,13 +222,42 @@ void elitism(){
         else if(offspring[i].fitness < offspring[words_child2].fitness)
             words_child2 = i;
 
-        if(parents[i].fitness > the_best.fitness.fitness)
-            the_best = parents[i];
+        if(parents[i].fitness > parents[best_parent].fitness)
+            best_parent = i;
     }
 
-    offspring[words_child1] = the_best;
-    offspring[words_child2] = the_best;
+    offspring[words_child1] = parents[best_parent];
+    offspring[words_child2] = parents[best_parent];
     
+}
+/* + ----------------------------------------------------
+   ! IMPRIMIR UN CROMOSOMA CON INDICADORES   video 7
+   +-----------------------------------------------------*/
+void printChromosome(Individual* individual)
+{
+    int i;
+    for(i=0; i<chromosome_length; i++)
+        if(i == individual->mutation_place) printf("(");
+        printf("%d ", individual->chromosome[i]);
+        if(i == individual->mutation_place) printf(")");
+        if(i == individual->crossover_place) printf("/");
+}
+
+/* + ----------------------------------------------------
+   ! MOSTRAR INFORMACION DE UNA POBLACIÓN
+   +-----------------------------------------------------*/
+void printPopulacionDetail(Individual* population)
+{
+    int i;
+    printf("\n\n-------------------------------\n");
+    printf(" #\tChromosome\tx\tFitness\tParents");
+    printf("\n\n-------------------------------\n");
+    for(i=0; i<POPULATION_SIZE; i++){
+        printf("\n%03d ", i+1);
+        printChromosome(&population[i]);
+        printf(" %.3f\t%.3f\t(%d,%d)", population[i].x, population[i].fitness, 
+                                                        population[i].parents[0],population[i].parents[1]);
+    }
 }
 
 
@@ -228,31 +273,42 @@ int main ()
     /* + ----------------------------------------------------
    ! PREPARACION
    +-----------------------------------------------------*/
-    getParameters()                     //video6
-    srand(long)time(NULL);              //Generación de aleatorios
+    getParameters();                    //video6
+    srand((long)time(NULL));              //Generación de aleatorios
 
     allocateMemory();
     createFirstGeneration();
     evaluatePopulation(parents);
-    updateRoulette(parents);            //llenar la ruleta video 6
-    int generation;
+    Individual* temp_helper;          //Correción video 7
+    //updateRoulette(parents);            //llenar la ruleta video 6
+    int generation,i;
 
     for (generation = 0; generation<max_generations; generation++){
+        updateRoulette(parents); 
+        printPopulacionDetail(parents);
         /* + ----------------------------------------------------
         ! PROCESO DE GENERACIÓN video 6
         +-----------------------------------------------------*/
         for(i = 0; i < POPULATION_SIZE-1;i+=2){ 
-            unsigned selected_father = rouletteWheelSelection();     //seleccionar individuos  video 6
-            unsigned selected_mother = rouletteWheelSelection();     //seleccionar individuos  video 6
+            selected_father = rouletteWheelSelection();     //seleccionar individuos  video 6
+            selected_mother = rouletteWheelSelection();     //seleccionar individuos  video 6
             crossover(&parents[selected_father], &parents[selected_mother], &offspring[i], &offspring[i+1]);   //Los cruzamos video 6
             mutation(&offspring[i]);                                //Mutamos a los hijos video 6
             mutation(&offspring[i+1]);                              //Mutamos a los hijos video 6 
+            evaluateTargetFunction(&offspring[i]);    // correcion video 7
+            evaluateTargetFunction(&offspring[i+1]);    // correcion video 7
         }
-        evaluatePopulation(offspring);   // Ya tenemos el valor de aptitud de los hijos, el paso siguiente es aplicar el elitismo
+        //evaluatePopulation(offspring);   // Ya tenemos el valor de aptitud de los hijos, el paso siguiente es aplicar el elitismo
         elitism();                       //Aplicamos elitimos
+        temp_helper = parents;
         parents = offspring;            // Ya los hijos sustituyen a los padres video 6  solo para que funcione
-        updateRoulette(parents);        // Actualizamos los valores de la ruleta video 6 solo para que funcione
+        offspring = temp_helper;
+        //updateRoulette(parents);        // Actualizamos los valores de la ruleta video 6 solo para que funcione
+        printf("\n\n\tTermino con exito generación %d\n", generation+1);
     }   
+    free(parents);
+    free(offspring);
+    free(roulette);
     return 0;
 }
 
