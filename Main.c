@@ -112,11 +112,11 @@ double binary2real(int* chromosome)
     //Converión a  numero binario -> codificación
     int i;
     double aux = 0.0;
-
-    for(i = chromosome_length-1 ; i >=0 ; i--)
-        if(chromosome[i] == 1) //correcion video 7
+    for(i = chromosome_length-1 ; i >=0 ; i--){
+        if(chromosome[i] == 1) //correcion video 7                                                                                                                                                                                                                                                                                                                                                                                                      
             aux += (double) pow(2,chromosome_length - i - 1); 
         //Ajuste al rango
+    }
     return FX_LOWER_BOUND + ((aux*(FX_UPPER_BOUND-FX_LOWER_BOUND))/(pow(2,chromosome_length)-1));
 }
 /* + ----------------------------------------------------
@@ -156,9 +156,10 @@ unsigned rouletteWheelSelection()
     double r = randomDouble(0,1);
     double sum = 0.0;
     int i, current_individual; //CORRECCIO VIDEO 7
-    for (i = POPULATION_SIZE; sum<r; i++)
+    for (i = POPULATION_SIZE; sum<r; i++){
         current_individual = i % POPULATION_SIZE; //CORRECCIO VIDEO 7
         sum += roulette[current_individual];
+    }
     return current_individual;    //CORRECCIO VIDEO 7
 }
 
@@ -184,7 +185,7 @@ void crossover(Individual* father, Individual* mother, Individual* child1, Indiv
     } else {
         for(i=0; i<chromosome_length;i++){
             child1->chromosome[i] = father->chromosome[i];
-            child1->chromosome[i] = father->chromosome[i];
+            child2->chromosome[i] = mother->chromosome[i];
         }
         child1->crossover_place = child2->crossover_place = -1;
         child1->parents[0] = child2->parents[0] = 0;   //COORECOPN VIDEO 7
@@ -256,7 +257,7 @@ void printPopulacionDetail(Individual* population)
         printf("\n%03d ", i+1);
         printChromosome(&population[i]);
         printf(" %.3f\t%.3f\t(%d,%d)", population[i].x, population[i].fitness, 
-                                                        population[i].parents[0],population[i].parents[1]);
+                                       population[i].parents[0],population[i].parents[1]);
     }
 }
 
